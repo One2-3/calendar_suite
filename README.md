@@ -8,7 +8,7 @@ Backend API 서버는 JCloud 환경에 Docker 기반으로 배포됩니다.
 ## 🧱 전체 아키텍처
 - Web App: React (apps/web)
 - Mobile App: React Native (Expo 기반, apps/mobile)
-- Backend API: 🔧 (FastAPI / Spring Boot / Express 중 실제 사용 스택 명시 필요)
+- Backend API: 🔧 (FastAPI)
 - Auth: Firebase Authentication + JWT
 - DB: MySQL
 - Cache / Session / Rate Limit: Redis
