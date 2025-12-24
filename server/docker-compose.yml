@@ -1,0 +1,82 @@
+services:
+  mysql:
+    image: mysql:8
+    container_name: calendar-suite-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DB:-calendar_suite}
+      MYSQL_USER: ${MYSQL_USER:-calendar_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-calendar_password}
+    ports:
+      - "${MYSQL_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - calendar-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: calendar-suite-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - calendar-network
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: calendar-suite-server
+    restart: unless-stopped
+    environment:
+      APP_PORT: ${APP_PORT:-8080}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DB:-calendar_suite}
+      MYSQL_USER: ${MYSQL_USER:-calendar_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-calendar_password}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      JWT_ACCESS_EXPIRES_MIN: ${JWT_ACCESS_EXPIRES_MIN:-30}
+      JWT_REFRESH_EXPIRES_DAYS: ${JWT_REFRESH_EXPIRES_DAYS:-7}
+      HOST: 0.0.0.0
+      PORT: ${APP_PORT:-8080}
+      DEBUG: ${DEBUG:-false}
+      CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}"
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - calendar-network
+    volumes:
+      - .:/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  calendar-network:
+    driver: bridge
+
+
