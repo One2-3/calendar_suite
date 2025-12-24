@@ -1,12 +1,27 @@
+// apps/web/src/components/SideDrawer.tsx
 import { useMemo, useState } from "react";
 import { useAuth } from "../auth/useAuth";
+import type { Calendar } from "../lib/api";
 import { themeStorage, type ThemeMode } from "../lib/storage";
 import { applyTheme } from "../lib/theme";
 
-export default function SideDrawer(props: { open: boolean; onClose: () => void }) {
+type Props = {
+  open: boolean;
+  onClose: () => void;
+
+  // ✅ CalendarPage에서 넘기는 props들: 일단 optional로 받아서 타입 에러 제거
+  calendars?: Calendar[];
+  enabledCalendarIds?: Record<string, boolean>;
+  onToggleCalendar?: (id: string, enabled: boolean) => void;
+};
+
+export default function SideDrawer(props: Props) {
   const { open, onClose } = props;
   const { me, themeMode, setThemeMode, logout } = useAuth();
   const [localTheme, setLocalTheme] = useState<ThemeMode>(themeMode);
+
+  const calendars = props.calendars ?? [];
+  const enabledMap = props.enabledCalendarIds ?? {};
 
   const userLine = useMemo(() => {
     if (!me) return "Unknown";
@@ -32,31 +47,42 @@ export default function SideDrawer(props: { open: boolean; onClose: () => void }
         </div>
         <div style={{ fontWeight: 700 }}>{userLine}</div>
 
-        <div style={{ height: 8 }} />
+        <div style={{ height: 10 }} />
 
         <div className="row">
           <div style={{ color: "var(--muted)" }}>테마</div>
         </div>
-        <select
-          className="select"
-          value={localTheme}
-          onChange={(e) => onChangeTheme(e.target.value as ThemeMode)}
-        >
+        <select className="select" value={localTheme} onChange={(e) => onChangeTheme(e.target.value as ThemeMode)}>
           <option value="auto">auto</option>
           <option value="light">light</option>
           <option value="dark">dark</option>
         </select>
 
-        <div style={{ height: 8 }} />
+        {calendars.length ? (
+          <>
+            <div style={{ height: 12 }} />
+            <div className="row">
+              <div style={{ color: "var(--muted)" }}>캘린더</div>
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {calendars.map((c) => {
+                const enabled = enabledMap[c.id] ?? true;
+                return (
+                  <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={enabled}
+                      onChange={(e) => props.onToggleCalendar?.(c.id, e.target.checked)}
+                    />
+                    <span style={{ fontSize: 14 }}>{c.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </>
+        ) : null}
 
-        <div className="row">
-          <div style={{ color: "var(--muted)" }}>캘린더 소스</div>
-        </div>
-        <div style={{ color: "var(--muted)", fontSize: 13, lineHeight: 1.5 }}>
-          TODO: calendars 목록/토글은 서버 연동 후 연결
-        </div>
-
-        <div style={{ height: 8 }} />
+        <div style={{ height: 14 }} />
 
         <button
           className="btn"

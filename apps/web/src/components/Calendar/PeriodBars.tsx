@@ -2,69 +2,117 @@ import { useMemo } from "react";
 import { Event } from "../../lib/api";
 import { isoDate } from "../../lib/date";
 
-type Bar = { row: number; c1: number; c2: number; title: string };
+function pickString(o: Record<string, unknown>, key: string): string | null {
+  const v = o[key];
+  return typeof v === "string" ? v : null;
+}
 
-// CSS 변수(--c1, --c2)를 안전하게 넣기 위한 타입
+function eventStart(e: Event): string {
+  return (typeof e.start_at === "string" ? e.start_at : null) ?? pickString(e as Record<string, unknown>, "startAt") ?? "";
+}
+
+function eventEnd(e: Event): string {
+  return (typeof e.end_at === "string" ? e.end_at : null) ?? pickString(e as Record<string, unknown>, "endAt") ?? "";
+}
+
+type Seg = {
+  row: number;
+  c1: number; // 1-based
+  c2: number; // end exclusive
+  title: string;
+};
+
+type Bar = Seg & { lane: number };
+
 type BarStyle = React.CSSProperties & {
   ["--c1"]?: number;
   ["--c2"]?: number;
+  ["--lane"]?: number;
 };
 
+function toDayKey(v?: string | null) {
+  if (!v) return "";
+  return v.length >= 10 ? v.slice(0, 10) : v;
+}
+
 /**
- * '느낌 우선' 기간 바:
- * - 월간 그리드 위에 같은 주(row)에서 start~end 범위를 가로 바으로 표시
- * - 겹침 처리/다층 배치는 하지 않고 단순 반복
+ * 멀티데이 바(느낌 우선):
+ * - 같은 주(row)에서 start~end 범위를 가로로 연결
+ * - 겹치면 lane(줄)을 하나씩 내려서 표시 (간단한 greedy)
  */
 export default function PeriodBars(props: {
   rows: { date: Date; inMonth: boolean }[][];
   events: Event[];
 }) {
   const bars = useMemo<Bar[]>(() => {
-    const list: Bar[] = [];
+    const segs: Seg[] = [];
 
+    // 1) 이벤트를 row 단위로 쪼개서 segment 생성
     for (const e of props.events) {
-      const start = e.start_at ? new Date(e.start_at) : null;
-      const end = e.end_at ? new Date(e.end_at) : null;
-      if (!start || !end) continue;
-
-      const startISO = isoDate(start);
-      const endISO = isoDate(end);
-
-      // multi-day만 바 처리(하루짜리는 칩으로 충분)
-      if (startISO === endISO) continue;
+      const s = toDayKey(eventStart(e));
+      const ed = toDayKey(eventEnd(e));
+      if (!s || !ed) continue;
+      if (s === ed) continue; // 하루짜리는 칩으로 표시
 
       for (let r = 0; r < props.rows.length; r++) {
         const row = props.rows[r];
-        const rowStartISO = isoDate(row[0].date);
-        const rowEndISO = isoDate(row[6].date);
+        const rowStart = isoDate(row[0].date);
+        const rowEnd = isoDate(row[6].date);
+        if (ed < rowStart || s > rowEnd) continue;
 
-        // overlap 체크 (YYYY-MM-DD 문자열 비교 OK)
-        if (endISO < rowStartISO || startISO > rowEndISO) continue;
-
-        // 시작 컬럼: row에서 startISO 이상이 처음 나오는 인덱스
         let cStart = 0;
         for (let i = 0; i < 7; i++) {
-          if (isoDate(row[i].date) >= startISO) {
+          if (isoDate(row[i].date) >= s) {
             cStart = i;
             break;
           }
         }
 
-        // 종료 컬럼(포함): row에서 endISO 이하인 마지막 인덱스
-        let cEndIdx = 6;
+        let cEnd = 6;
         for (let i = 6; i >= 0; i--) {
-          if (isoDate(row[i].date) <= endISO) {
-            cEndIdx = i;
+          if (isoDate(row[i].date) <= ed) {
+            cEnd = i;
             break;
           }
         }
 
-        // CSS grid column은 1-based, end exclusive
-        list.push({ row: r, c1: cStart + 1, c2: cEndIdx + 2, title: e.title });
+        segs.push({ row: r, c1: cStart + 1, c2: cEnd + 2, title: e.title });
       }
     }
 
-    return list;
+    // 2) row별 lane 배치 (겹치면 다음 lane)
+    const grouped = new Map<number, Seg[]>();
+    for (const s of segs) {
+      const arr = grouped.get(s.row) ?? [];
+      arr.push(s);
+      grouped.set(s.row, arr);
+    }
+
+    const out: Bar[] = [];
+    for (const [, list] of grouped) {
+      list.sort((a, b) => (a.c1 - b.c1) || (a.c2 - b.c2));
+      const lanesEnd: number[] = [];
+
+      for (const seg of list) {
+        let placed = false;
+        for (let lane = 0; lane < lanesEnd.length; lane++) {
+          if (lanesEnd[lane] <= seg.c1) {
+            lanesEnd[lane] = seg.c2;
+            out.push({ ...seg, lane });
+            placed = true;
+            break;
+          }
+        }
+
+        if (!placed) {
+          const lane = lanesEnd.length;
+          lanesEnd.push(seg.c2);
+          out.push({ ...seg, lane });
+        }
+      }
+    }
+
+    return out;
   }, [props.events, props.rows]);
 
   // index.css의 .day-cell min-height(108px) 기반 대략 위치
@@ -73,8 +121,7 @@ export default function PeriodBars(props: {
   return (
     <div className="period-layer" aria-hidden="true">
       {bars.map((b, i) => {
-        const style: BarStyle = { ["--c1"]: b.c1, ["--c2"]: b.c2 };
-
+        const style: BarStyle = { ["--c1"]: b.c1, ["--c2"]: b.c2, ["--lane"]: b.lane };
         return (
           <div key={`${b.row}-${i}`} className="period-row" style={{ top: rowTop(b.row) }}>
             <div className="period-bar" style={style}>

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import BottomNav from "../components/BottomNav";
 import SideDrawer from "../components/SideDrawer";
 import ComposerModal from "../components/ComposerModal";
-import SearchModal from "../components/SearchModal";
 import MonthGrid from "../components/Calendar/MonthGrid";
 import PeriodBars from "../components/Calendar/PeriodBars";
 import { calendarApi, Calendar, eventApi, Event, taskApi, Task } from "../lib/api";
@@ -11,6 +11,8 @@ import { buildMonthGrid, isoDate, monthTitle } from "../lib/date";
 type LoadState = "idle" | "loading" | "ready" | "error";
 
 export default function CalendarPage() {
+  const nav = useNavigate();
+  const [sp] = useSearchParams();
   const now = new Date();
   const [ym, setYm] = useState<{ y: number; m: number }>({ y: now.getFullYear(), m: now.getMonth() + 1 });
 
@@ -31,8 +33,18 @@ export default function CalendarPage() {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [pickedISO, setPickedISO] = useState<string>(() => isoDate(new Date()));
+
+  // /app?date=YYYY-MM-DD 로 들어오면 해당 날짜/월로 이동
+  useEffect(() => {
+    const iso = sp.get("date");
+    if (!iso || iso.length < 10) return;
+    const y = Number(iso.slice(0, 4));
+    const m = Number(iso.slice(5, 7));
+    if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return;
+    setYm({ y, m });
+    setPickedISO(iso.slice(0, 10));
+  }, [sp]);
 
   const enabledIds = useMemo(() => {
     const ids = calendars.map((c) => c.id);
@@ -45,14 +57,14 @@ export default function CalendarPage() {
   const defaultCalendarId = enabledIds[0] ?? calendars[0]?.id ?? null;
 
   const onPrev = () => {
-    setYm((p) => {
+    setYm((p: { y: number; m: number }) => {
       const m = p.m - 1;
       if (m <= 0) return { y: p.y - 1, m: 12 };
       return { y: p.y, m };
     });
   };
   const onNext = () => {
-    setYm((p) => {
+    setYm((p: { y: number; m: number }) => {
       const m = p.m + 1;
       if (m >= 13) return { y: p.y + 1, m: 1 };
       return { y: p.y, m };
@@ -162,16 +174,32 @@ export default function CalendarPage() {
           rows={rows}
           events={events}
           tasks={tasks}
+          selectedISO={pickedISO}
           onPickDate={(iso) => {
             setPickedISO(iso);
             setComposerOpen(true);
           }}
         />
 
+
+
         {error ? <div style={{ padding: "10px 12px", color: "var(--danger)" }}>{error}</div> : null}
       </div>
 
-      <BottomNav onMenu={() => setDrawerOpen(true)} onCompose={() => setComposerOpen(true)} onSearch={() => setSearchOpen(true)} />
+      <BottomNav
+        onMenu={() => setDrawerOpen(true)}
+        onCompose={() => setComposerOpen(true)}
+        onSearch={() =>
+          nav("/app/search", {
+            state: {
+              events,
+              tasks,
+              month: { y: ym.y, m: ym.m },
+              range,
+            },
+          })
+        }
+      />
 
       <SideDrawer
         open={drawerOpen}
@@ -188,8 +216,6 @@ export default function CalendarPage() {
         onClose={() => setComposerOpen(false)}
         onCreated={() => void loadMonthData()}
       />
-
-      <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} events={events} tasks={tasks} />
     </div>
   );
 }

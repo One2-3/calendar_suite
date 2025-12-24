@@ -2,10 +2,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { signOut } from "firebase/auth";
 import { firebaseAuth } from "../lib/firebase";
-import { tokenStorage } from "../lib/storage";
+import { themeStorage, tokenStorage, type ThemeMode } from "../lib/storage";
 import { authApi, setOnAuthFailure } from "../lib/api";
 import type { AuthStatus, ServerUser } from "./types";
 import { AuthContext } from "./AuthContext";
+import { applyTheme } from "../lib/theme";
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   // ✅ effect에서 setState 경고 피하려고 초기값을 여기서 결정
@@ -13,6 +14,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   const [status, setStatus] = useState<AuthStatus>(initialStatus);
   const [me, setMe] = useState<ServerUser | null>(null);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => themeStorage.get());
+
+  useEffect(() => {
+    applyTheme(themeMode);
+  }, [themeMode]);
 
   const logout = async () => {
     tokenStorage.clear();
@@ -51,8 +57,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const value = useMemo(
-    () => ({ status, me, refreshMe, logout }),
-    [status, me]
+    () => ({ status, me, themeMode, setThemeMode, refreshMe, logout }),
+    [status, me, themeMode]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
