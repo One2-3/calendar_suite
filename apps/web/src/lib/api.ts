@@ -40,7 +40,7 @@ async function toApiError(res: Response): Promise<ApiError> {
   }
   return { code: `HTTP_${res.status}`, message: res.statusText || "Request failed" };
 }
-
+ 
 // ---- endpoints (상수로 관리) ----
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 

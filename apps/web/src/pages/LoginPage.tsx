@@ -9,6 +9,9 @@ import { useAuth } from "../auth/useAuth";
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const AUTH_FIREBASE_EXCHANGE = `${API_BASE}/auth/firebase`;
 
+const DEV_BYPASS = import.meta.env.VITE_DEV_BYPASS_AUTH === "true";
+
+
 type TokenPair = { accessToken: string; refreshToken: string };
 
 function normalizeTokenPair(raw: unknown): TokenPair | null {
@@ -37,8 +40,13 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (DEV_BYPASS) {
+      nav("/app", { replace: true });
+      return;
+    }
     if (status === "authed") nav("/app", { replace: true });
   }, [status, nav]);
+  
 
   const onLogin = async () => {
     setError(null);
@@ -91,7 +99,7 @@ export default function LoginPage() {
           {busy ? "로그인 중..." : "Google로 로그인"}
         </button>
 
-        <button
+        {/* <button
           type="button"
           onClick={() => {
             console.log("DEV enter clicked");
@@ -102,7 +110,7 @@ export default function LoginPage() {
           style={{ marginTop: 12 }}
         >
           로그인 없이 들어가기(DEV)
-        </button>
+        </button> */}
 
         {error ? <div className="login-err">{error}</div> : null}
       </div>

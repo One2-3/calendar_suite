@@ -71,10 +71,10 @@
   
   /* 스샷처럼 “주 간격이 큼” */
   .month-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    column-gap: 0;
-    row-gap: 74px; /* 핵심: 주 간 여백 */
+    display: flex;
+    flex-direction: column;
+    /* column-gap: 0; */
+    gap: 8px; /* 핵심: 주 간 여백 */
   }
   
   /* 버튼이지만 달력 셀처럼 보이게 */
@@ -881,11 +881,7 @@ body {
   /* =========================
      Month Grid (Calendar/MonthGrid.tsx)
      ========================= */
-  
-  .month-grid {
-    position: relative;
-    padding: 10px 0 0;
-  }
+
   
   .week-row {
     display: grid;

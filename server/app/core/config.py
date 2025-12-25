@@ -1,11 +1,11 @@
 """
 Pydantic Settings를 사용한 환경변수 관리
 """
+from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from __future__ import annotations
 
 import json
 import os

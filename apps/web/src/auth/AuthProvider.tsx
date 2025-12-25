@@ -10,6 +10,17 @@ import { applyTheme } from "../lib/theme";
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const AUTH_ME = `${API_BASE}/auth/me`;
 
+const DEV_BYPASS = import.meta.env.VITE_DEV_BYPASS_AUTH === "true";
+
+const DEV_USER: ServerUser = {
+  id: "dev-user",
+  email: "dev@local",
+  displayName: "Dev User",
+  role: "DEV",
+  photoURL: null,
+};
+
+
 async function fetchMe(accessToken: string): Promise<ServerUser> {
   const res = await fetch(AUTH_ME, {
     method: "GET",
@@ -29,7 +40,12 @@ async function fetchMe(accessToken: string): Promise<ServerUser> {
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   // ✅ effect에서 setState 경고 피하려고 초기값을 여기서 결정
-  const initialStatus: AuthStatus = tokenStorage.getAccess() ? "loading" : "guest";
+  const initialStatus: AuthStatus = DEV_BYPASS
+  ? "authed"
+  : tokenStorage.getAccess()
+    ? "loading"
+    : "guest";
+
 
   const [status, setStatus] = useState<AuthStatus>(initialStatus);
   const [me, setMe] = useState<ServerUser | null>(null);
@@ -64,13 +80,19 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   };
 
   useEffect(() => {
-    // access 없으면 그대로 guest
+    if (DEV_BYPASS) {
+      setMe(DEV_USER);
+      setStatus("authed");
+      return;
+    }
+  
     const access = tokenStorage.getAccess();
     if (!access) return;
-
+  
     void refreshMe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  
 
   const value = useMemo(
     () => ({ status, me, themeMode, setThemeMode, refreshMe, logout }),
