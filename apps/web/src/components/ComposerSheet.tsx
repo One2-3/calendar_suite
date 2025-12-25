@@ -1,50 +1,47 @@
+// apps/web/src/components/ComposerSheet.tsx
 import { useMemo, useState } from "react";
-import { useCalendarState } from "../contexts/CalendarContext";
-import { calendarApi } from "../lib/api";
-import { dateISOToLocalDateTimeEnd, dateISOToLocalDateTimeStart, localDateTimeToSend } from "../lib/datetime";
+import type { Event, Task } from "../lib/api";
+import { eventsApi, notesApi, taskApi } from "../lib/api";
+import { localDateTimeToSend } from "../lib/datetime";
 import { formatApiError } from "../lib/error";
-
-type Tab = "event" | "task" | "memo";
 
 export default function ComposerSheet(props: {
   open: boolean;
+  dateISO: string;
+  defaultCalendarId: string | null;
   onClose: () => void;
   onSaved?: () => void;
-  selectedDateISO: string; // YYYY-MM-DD
+  upsertEvent: (e: Event) => void; // ✅ any 제거
+  upsertTask: (t: Task) => void; // ✅ any 제거
 }) {
-  const { open, onClose, onSaved, selectedDateISO } = props;
-  const { upsertEvent, upsertTask } = useCalendarState();
+  const { open, dateISO: selectedDateISO, defaultCalendarId, onClose, onSaved, upsertEvent, upsertTask } = props;
 
-  const [tab, setTab] = useState<Tab>("event");
+  const [tab, setTab] = useState<"event" | "task" | "memo">("event");
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<{ title: string; body?: string } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  // event
   const [eventTitle, setEventTitle] = useState("");
-  const [allDay, setAllDay] = useState(true);
-  const [startAt, setStartAt] = useState("");
-  const [endAt, setEndAt] = useState("");
   const [eventMemo, setEventMemo] = useState("");
+  const [allDay, setAllDay] = useState(false);
+  const [startAt, setStartAt] = useState(() => `${selectedDateISO}T09:00`);
+  const [endAt, setEndAt] = useState(() => `${selectedDateISO}T10:00`);
 
-  // task
   const [taskTitle, setTaskTitle] = useState("");
-  const [dueAt, setDueAt] = useState("");
+  const [dueAt, setDueAt] = useState(selectedDateISO);
 
-  // memo
   const [memoTitle, setMemoTitle] = useState("");
   const [memoBody, setMemoBody] = useState("");
 
-  useMemo(() => {
-    if (!open) return;
-    setErr(null);
-    setStartAt(dateISOToLocalDateTimeStart(selectedDateISO));
-    setEndAt(dateISOToLocalDateTimeEnd(selectedDateISO));
-    setDueAt(selectedDateISO);
-  }, [open, selectedDateISO]);
+  const calId = useMemo(() => defaultCalendarId ?? "", [defaultCalendarId]);
 
   if (!open) return null;
 
   async function save() {
+    if (!calId) {
+      setErr("기본 캘린더가 필요해요");
+      return;
+    }
+
     setSaving(true);
     setErr(null);
 
@@ -53,19 +50,16 @@ export default function ComposerSheet(props: {
         const title = eventTitle.trim();
         if (!title) throw new Error("일정 제목을 입력해줘");
 
-        const payload = {
+        const created = await eventsApi.create({
+          calendar_id: calId,
           title,
-          allDay,
-          startAt: localDateTimeToSend(startAt),
-          endAt: localDateTimeToSend(endAt),
-          memo: eventMemo.trim() || undefined,
-        };
+          description: eventMemo.trim() || null,
+          is_all_day: allDay,
+          start_at: localDateTimeToSend(startAt),
+          end_at: localDateTimeToSend(endAt),
+        });
 
-        const created = await calendarApi.createEvent(payload);
-
-        // ✅ 즉시 반영 (api.ts가 이미 normalize해서 start_at/end_at가 채워짐)
         upsertEvent(created);
-
         onClose();
         onSaved?.();
         return;
@@ -75,14 +69,19 @@ export default function ComposerSheet(props: {
         const title = taskTitle.trim();
         if (!title) throw new Error("할일 제목을 입력해줘");
 
-        const created = await calendarApi.createTask({
+        const due_at = `${(dueAt || selectedDateISO).slice(0, 10)}T00:00:00.000Z`;
+
+        const created = await taskApi.create({
+          calendar_id: calId,
           title,
-          dueAt,
-          completed: false,
+          description: null,
+          due_at,
+          status: "PENDING",
+          priority: null,
+          type: undefined, // ✅ null → undefined (스샷 에러 제거)
         });
 
         upsertTask(created);
-
         onClose();
         onSaved?.();
         return;
@@ -92,106 +91,110 @@ export default function ComposerSheet(props: {
       const title = memoTitle.trim() || memoBody.trim();
       if (!title) throw new Error("메모 내용을 입력해줘");
 
-      const res = await calendarApi.createNoteOrMemoFallback({
-        dateISO: selectedDateISO,
-        title,
-        memo: memoBody.trim() || undefined,
-      });
+      try {
+        // notes endpoint가 있으면 notes로 생성
+        await notesApi.create({
+          calendar_id: calId,
+          date: selectedDateISO.slice(0, 10), // ✅ YYYY-MM-DD
+          title,
+          memo: memoBody.trim() || undefined,
+        });
 
-      // memo가 task로 저장된 경우만 UI에 즉시 반영(칩 표시)
-      if (res.kind === "task" && res.task) {
-        upsertTask(res.task);
+        // notes는 현재 월 데이터에 합쳐진 구조가 없을 수 있음(현재 tasks 기반이면 즉시 반영 불가)
+        // TODO: 서버에서 notes list를 제공하면 여기서도 upsert 가능
+      } catch {
+        // 없으면 task(type=MEMO)로 fallback
+        const created = await taskApi.create({
+          calendar_id: calId,
+          title,
+          description: memoBody.trim() || null,
+          due_at: `${selectedDateISO.slice(0, 10)}T00:00:00.000Z`,
+          status: "PENDING",
+          priority: null,
+          type: "MEMO",
+        });
+        upsertTask(created);
       }
 
       onClose();
       onSaved?.();
     } catch (e) {
-      setErr(formatApiError(e));
+      const fe = formatApiError(e);
+      setErr(fe.body ?? fe.title);
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="sheet-backdrop" onClick={onClose} role="dialog" aria-modal="true">
+    <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-grab" />
         <div className="sheet-head">
-          <div className="sheet-date">{selectedDateISO}</div>
-          <button className="sheet-x" onClick={onClose} aria-label="닫기">
+          <div className="sheet-title">{selectedDateISO}</div>
+          <button className="icon-btn" onClick={onClose} aria-label="close">
             ✕
           </button>
         </div>
 
-        <div className="sheet-tabs" role="tablist" aria-label="기록 종류">
-          <button className={"tab" + (tab === "event" ? " active" : "")} onClick={() => setTab("event")} type="button">
-            일정
-          </button>
-          <button className={"tab" + (tab === "task" ? " active" : "")} onClick={() => setTab("task")} type="button">
-            할일
-          </button>
-          <button className={"tab" + (tab === "memo" ? " active" : "")} onClick={() => setTab("memo")} type="button">
-            메모
-          </button>
+        <div className="sheet-tabs">
+          {(["event", "task", "memo"] as const).map((t) => (
+            <button key={t} className={["tab", tab === t ? "active" : ""].join(" ")} onClick={() => setTab(t)}>
+              {t === "event" ? "일정" : t === "task" ? "할일" : "메모"}
+            </button>
+          ))}
         </div>
-
-        {err ? (
-          <div className="sheet-error">
-            <div className="sheet-error-title">{err.title}</div>
-            {err.body ? <pre className="sheet-error-body">{err.body}</pre> : null}
-          </div>
-        ) : null}
 
         <div className="sheet-body">
+          {err ? <div style={{ color: "var(--danger)", marginBottom: 10 }}>{err}</div> : null}
+
           {tab === "event" ? (
-            <div className="form">
-              <label className="lbl">제목</label>
-              <input className="in" value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} placeholder="예: 영화 예매" />
+            <>
+              <label className="label">제목</label>
+              <input className="input" value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} />
+              <label className="label" style={{ marginTop: 10 }}>
+                메모
+              </label>
+              <textarea className="textarea" value={eventMemo} onChange={(e) => setEventMemo(e.target.value)} />
 
-              <div className="row">
-                <label className="chk">
-                  <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
-                  <span>하루종일</span>
-                </label>
+              <label className="check-row" style={{ marginTop: 10 }}>
+                <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
+                <span>종일</span>
+              </label>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+                <div>
+                  <label className="label">시작</label>
+                  <input className="input" value={startAt} onChange={(e) => setStartAt(e.target.value)} />
+                </div>
+                <div>
+                  <label className="label">종료</label>
+                  <input className="input" value={endAt} onChange={(e) => setEndAt(e.target.value)} />
+                </div>
               </div>
-
-              <label className="lbl">시작</label>
-              <input className="in" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} disabled={allDay} />
-
-              <label className="lbl">끝</label>
-              <input className="in" type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} disabled={allDay} />
-
-              <label className="lbl">메모(선택)</label>
-              <textarea className="ta" value={eventMemo} onChange={(e) => setEventMemo(e.target.value)} placeholder="옵션" />
-            </div>
-          ) : null}
-
-          {tab === "task" ? (
-            <div className="form">
-              <label className="lbl">제목</label>
-              <input className="in" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="예: 웹초 과제" />
-
-              <label className="lbl">마감일</label>
-              <input className="in" type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
-            </div>
-          ) : null}
-
-          {tab === "memo" ? (
-            <div className="form">
-              <label className="lbl">제목(선택)</label>
-              <input className="in" value={memoTitle} onChange={(e) => setMemoTitle(e.target.value)} placeholder="예: 아이디어" />
-
-              <label className="lbl">내용</label>
-              <textarea className="ta" value={memoBody} onChange={(e) => setMemoBody(e.target.value)} placeholder="메모를 입력" />
-            </div>
-          ) : null}
+            </>
+          ) : tab === "task" ? (
+            <>
+              <label className="label">제목</label>
+              <input className="input" value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} />
+              <label className="label" style={{ marginTop: 10 }}>
+                날짜
+              </label>
+              <input className="input" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+            </>
+          ) : (
+            <>
+              <label className="label">제목</label>
+              <input className="input" value={memoTitle} onChange={(e) => setMemoTitle(e.target.value)} />
+              <label className="label" style={{ marginTop: 10 }}>
+                내용
+              </label>
+              <textarea className="textarea" value={memoBody} onChange={(e) => setMemoBody(e.target.value)} />
+            </>
+          )}
         </div>
 
-        <div className="sheet-actions">
-          <button className="btn-lite" onClick={onClose} disabled={saving}>
-            취소
-          </button>
-          <button className="btn-solid" onClick={save} disabled={saving}>
+        <div className="sheet-foot">
+          <button className="btn primary" onClick={() => void save()} disabled={saving}>
             {saving ? "저장 중…" : "저장"}
           </button>
         </div>

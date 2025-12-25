@@ -3,8 +3,26 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithPopup } from "firebase/auth";
 import { firebaseAuth, googleProvider } from "../lib/firebase";
-import { authApi } from "../lib/api";
+import { tokenStorage } from "../lib/storage";
 import { useAuth } from "../auth/useAuth";
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+const AUTH_FIREBASE_EXCHANGE = `${API_BASE}/auth/firebase`;
+
+type TokenPair = { accessToken: string; refreshToken: string };
+
+function normalizeTokenPair(raw: unknown): TokenPair | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const access =
+    (typeof r.accessToken === "string" && r.accessToken) ||
+    (typeof r.access_token === "string" && r.access_token);
+  const refresh =
+    (typeof r.refreshToken === "string" && r.refreshToken) ||
+    (typeof r.refresh_token === "string" && r.refresh_token);
+  if (!access || !refresh) return null;
+  return { accessToken: access, refreshToken: refresh };
+}
 
 function getErrMsg(err: unknown) {
   if (err instanceof Error) return err.message;
@@ -30,7 +48,28 @@ export default function LoginPage() {
       const idToken = await cred.user.getIdToken();
 
       // ✅ 서버 JWT 교환 (POST /auth/firebase { idToken })
-      await authApi.firebaseExchange(idToken);
+      const res = await fetch(AUTH_FIREBASE_EXCHANGE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || `HTTP ${res.status}`);
+      }
+      const json = (await res.json()) as unknown;
+      const pair = normalizeTokenPair(json);
+      if (!pair) throw new Error("Invalid token response from /auth/firebase");
+
+      // ✅ 프로젝트 tokenStorage에 저장
+      tokenStorage.set(pair.accessToken, pair.refreshToken);
+
+      // ✅ 현재 api.ts가 access_token 키를 쓰는 경우도 있어 호환 저장
+      try {
+        localStorage.setItem("access_token", pair.accessToken);
+      } catch {
+        // ignore
+      }
 
       // ✅ accessToken으로 /auth/me 호출해서 UI 갱신
       await refreshMe();
@@ -51,8 +90,23 @@ export default function LoginPage() {
         <button onClick={onLogin} disabled={busy}>
           {busy ? "로그인 중..." : "Google로 로그인"}
         </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            console.log("DEV enter clicked");
+            tokenStorage.set("dev-access", "dev-refresh");
+            // 보호 라우트가 accessToken만 보면 통과하게 만들기
+            window.location.href = "/app";
+          }}
+          style={{ marginTop: 12 }}
+        >
+          로그인 없이 들어가기(DEV)
+        </button>
+
         {error ? <div className="login-err">{error}</div> : null}
       </div>
     </div>
   );
+
 }

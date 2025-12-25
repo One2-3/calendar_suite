@@ -1,45 +1,16 @@
 // apps/web/src/lib/api.ts
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
 import { tokenStorage } from "./storage";
 import type { ServerUser } from "../auth/types";
 
-/**
- * 엔드포인트 상수 (프로젝트마다 쉽게 교체 가능)
- * - CalendarPage / ComposerModal 이 기대하는 API 형태를 우선 지원
- */
-export const AUTH_ME = "/auth/me";
-export const AUTH_FIREBASE = "/auth/firebase";
-export const AUTH_REFRESH = "/auth/refresh";
-
-export const CALENDARS_LIST = "/calendars";
-export const EVENTS_LIST = "/events";
-export const EVENTS_CREATE = "/events";
-export const TASKS_LIST = "/tasks";
-export const TASKS_CREATE = "/tasks";
-export const NOTES_CREATE = "/notes"; // 서버가 없을 수 있음
-
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
-
-type TokenResponseSnake = { access_token: string; refresh_token: string };
-type TokenResponseCamel = { accessToken: string; refreshToken: string };
-
-function isTokenSnake(v: unknown): v is TokenResponseSnake {
-  return !!v && typeof v === "object" && "access_token" in v && "refresh_token" in v;
-}
-function isTokenCamel(v: unknown): v is TokenResponseCamel {
-  return !!v && typeof v === "object" && "accessToken" in v && "refreshToken" in v;
-}
-
-function normalizeTokens(v: unknown): { accessToken: string; refreshToken: string } {
-  if (isTokenCamel(v)) return { accessToken: v.accessToken, refreshToken: v.refreshToken };
-  if (isTokenSnake(v)) return { accessToken: v.access_token, refreshToken: v.refresh_token };
-  throw new Error("Invalid token response shape");
-}
-
-// AuthProvider에서 등록해두면, refresh 실패 시 여기서 호출해서 강제 로그아웃 처리 가능
-let onAuthFailure: (() => void) | null = null;
-export function setOnAuthFailure(fn: (() => void) | null) {
-  onAuthFailure = fn;
-}
+export type Page<T> = {
+  content: T[];
+  totalElements?: number;
+  totalPages?: number;
+  number?: number;
+  size?: number;
+};
 
 export type ApiError = {
   code: string;
@@ -47,157 +18,241 @@ export type ApiError = {
   details?: unknown;
 };
 
-export class ApiErrorImpl extends Error implements ApiError {
-  code: string;
-  details?: unknown;
-  constructor(input: ApiError) {
-    super(input.message);
-    this.name = "ApiError";
-    this.code = input.code;
-    this.details = input.details;
-  }
-}
-
 function isRecord(v: unknown): v is Record<string, unknown> {
-  return !!v && typeof v === "object";
+  return !!v && typeof v === "object" && !Array.isArray(v);
 }
 
-async function safeJson(res: Response): Promise<unknown> {
+async function toApiError(res: Response): Promise<ApiError> {
   try {
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-
-async function toApiError(res: Response): Promise<ApiErrorImpl> {
-  const data = await safeJson(res);
-
-  // 서버 공통 포맷(code/message/details) 우선
-  if (isRecord(data)) {
-    const msg = typeof data.message === "string" ? data.message : undefined;
-    if (msg) {
-      const code = typeof data.code === "string" ? data.code : `HTTP_${res.status}`;
-      return new ApiErrorImpl({ code, message: msg, details: (data as Record<string, unknown>).details });
+    const json = (await res.json()) as unknown;
+    if (isRecord(json)) {
+      const code =
+        (typeof json.code === "string" && json.code) ||
+        (typeof json.error === "string" && json.error) ||
+        `HTTP_${res.status}`;
+      const message =
+        (typeof json.message === "string" && json.message) || res.statusText || "Request failed";
+      const details = json.details;
+      return { code, message, details };
     }
+  } catch {
+    // ignore
+  }
+  return { code: `HTTP_${res.status}`, message: res.statusText || "Request failed" };
+}
+
+// ---- endpoints (상수로 관리) ----
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+
+export const AUTH_ME = `${API_BASE}/auth/me`;
+export const AUTH_REFRESH = `${API_BASE}/auth/refresh`;
+export const AUTH_FIREBASE_EXCHANGE = `${API_BASE}/auth/firebase`;
+
+export const CALENDARS_LIST = `${API_BASE}/calendars`;
+export const EVENTS_LIST = `${API_BASE}/events`;
+export const TASKS_LIST = `${API_BASE}/tasks`;
+export const NOTES_CREATE = `${API_BASE}/notes`;
+
+let onAuthFailure: (() => void) | null = null;
+
+/**
+ * api.ts 내부에서 refresh 실패/401 처리 시, 상위(AuthProvider)에서 logout을 트리거할 수 있게 콜백을 주입한다.
+ */
+export function setOnAuthFailure(cb: (() => void) | null) {
+  onAuthFailure = cb;
+}
+
+type TokenPair = { accessToken: string; refreshToken: string };
+
+function normalizeTokenPair(raw: unknown): TokenPair | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const access =
+    (typeof r.accessToken === "string" && r.accessToken) ||
+    (typeof r.access_token === "string" && r.access_token);
+  const refresh =
+    (typeof r.refreshToken === "string" && r.refreshToken) ||
+    (typeof r.refresh_token === "string" && r.refresh_token);
+  if (!access || !refresh) return null;
+  return { accessToken: access, refreshToken: refresh };
+}
+
+function getToken(): string | null {
+  return tokenStorage.getAccess();
+}
+
+async function refreshTokensOrThrow(): Promise<void> {
+  const refreshToken = tokenStorage.getRefresh();
+  if (!refreshToken) {
+    onAuthFailure?.();
+    throw new Error("No refresh token");
   }
 
-  return new ApiErrorImpl({
-    code: `HTTP_${res.status}`,
-    message: `요청 실패 (HTTP ${res.status})`,
-    details: data ?? undefined,
+  const res = await fetch(AUTH_REFRESH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
   });
-}
 
-function toQuery(params: Record<string, string | number | boolean | undefined | null>) {
-  const sp = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v === undefined || v === null) continue;
-    sp.set(k, String(v));
+  if (!res.ok) {
+    onAuthFailure?.();
+    throw await toApiError(res);
   }
-  const s = sp.toString();
-  return s ? `?${s}` : "";
+
+  const json = await res.json();
+  const pair = normalizeTokenPair(json);
+  if (!pair) {
+    onAuthFailure?.();
+    throw new Error("Invalid refresh response");
+  }
+
+  tokenStorage.set(pair.accessToken, pair.refreshToken);
 }
 
-async function jsonFetch<T>(
-  path: string,
-  init?: RequestInit,
-  opts?: { withAuth?: boolean; retryOn401?: boolean }
-): Promise<T> {
-  if (!API_BASE) throw new Error("VITE_API_BASE_URL is empty");
+type JsonFetchInit = RequestInit & {
+  withAuth?: boolean;
+  retryOn401?: boolean;
+};
 
-  const headers = new Headers(init?.headers);
+async function jsonFetch<T>(url: string, init: JsonFetchInit = {}): Promise<T> {
+  const { withAuth, retryOn401, ...rest } = init;
+
+  const headers = new Headers(rest.headers);
   headers.set("Content-Type", "application/json");
 
-  if (opts?.withAuth) {
-    const access = tokenStorage.getAccess();
-    if (access) headers.set("Authorization", `Bearer ${access}`);
+  if (withAuth) {
+    const token = getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers,
-  });
+  const res = await fetch(url, { ...rest, headers });
 
-  // 401 → refresh 시도 후 1회 재시도
-  if (res.status === 401 && opts?.retryOn401) {
-    const ok = await tryRefresh();
-    if (!ok) {
-      onAuthFailure?.();
-      throw new Error("Unauthorized (refresh failed)");
+  if (!res.ok) {
+    // 401이면 refresh 후 1회 재시도
+    if (res.status === 401 && retryOn401 && withAuth) {
+      await refreshTokensOrThrow();
+      const retryHeaders = new Headers(headers);
+      const next = getToken();
+      if (next) retryHeaders.set("Authorization", `Bearer ${next}`);
+      const retryRes = await fetch(url, { ...rest, headers: retryHeaders });
+
+      if (!retryRes.ok) {
+        if (retryRes.status === 401) onAuthFailure?.();
+        throw await toApiError(retryRes);
+      }
+
+      if (retryRes.status === 204) return undefined as T;
+      return (await retryRes.json()) as T;
     }
 
-    const headers2 = new Headers(init?.headers);
-    headers2.set("Content-Type", "application/json");
-    const access2 = tokenStorage.getAccess();
-    if (access2) headers2.set("Authorization", `Bearer ${access2}`);
-
-    const res2 = await fetch(`${API_BASE}${path}`, { ...init, headers: headers2 });
-    if (!res2.ok) throw await toApiError(res2);
-    return (await res2.json()) as T;
+    if (res.status === 401) onAuthFailure?.();
+    throw await toApiError(res);
   }
 
-  if (!res.ok) throw await toApiError(res);
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
-async function tryRefresh(): Promise<boolean> {
-  const refresh = tokenStorage.getRefresh();
-  if (!refresh) return false;
-
-  try {
-    const data = await jsonFetch<unknown>(AUTH_REFRESH, {
-      method: "POST",
-      body: JSON.stringify({ refreshToken: refresh }),
-    });
-    const t = normalizeTokens(data);
-    tokenStorage.set(t.accessToken, t.refreshToken);
-    return true;
-  } catch {
-    tokenStorage.clear();
-    return false;
-  }
-}
-
-// -----------------
-// Auth
-// -----------------
-
+// ---- auth api ----
 export const authApi = {
-  // POST {API}/auth/firebase  body: { idToken }
-  async firebaseExchange(idToken: string) {
-    const data = await jsonFetch<unknown>(AUTH_FIREBASE, {
+  /**
+   * 서버가 내려주는 access/refresh 토큰을 tokenStorage에 저장
+   */
+  async firebaseExchange(idToken: string): Promise<void> {
+    const res = await fetch(AUTH_FIREBASE_EXCHANGE, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idToken }),
     });
-    const t = normalizeTokens(data);
-    tokenStorage.set(t.accessToken, t.refreshToken);
-    return t;
+    if (!res.ok) throw await toApiError(res);
+
+    const json = await res.json();
+    const pair = normalizeTokenPair(json);
+    if (!pair) throw new Error("Invalid token response from /auth/firebase");
+    tokenStorage.set(pair.accessToken, pair.refreshToken);
   },
 
-  // GET /auth/me (Bearer access)
+  async refresh(): Promise<void> {
+    await refreshTokensOrThrow();
+  },
+
   async me(): Promise<ServerUser> {
-    return await jsonFetch<ServerUser>(AUTH_ME, { method: "GET" }, { withAuth: true, retryOn401: true });
+    return await jsonFetch<ServerUser>(AUTH_ME, { withAuth: true, retryOn401: true });
   },
 };
 
-// -----------------
-// Calendar domain types
-// -----------------
+// ---- helpers (normalize용) ----
+function pickString(raw: unknown, key: string): string | undefined {
+  if (!isRecord(raw)) return undefined;
+  const v = raw[key];
+  return typeof v === "string" ? v : undefined;
+}
 
-export type Page<T> = {
-  content: T[];
-  page?: number;
-  size?: number;
-  totalElements?: number;
-  totalPages?: number;
-};
+function extractContent(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (isRecord(raw) && Array.isArray(raw.content)) return raw.content as unknown[];
+  if (isRecord(raw) && Array.isArray(raw.items)) return raw.items as unknown[];
+  return [];
+}
 
-export type Calendar = {
-  id: string;
-  name: string;
-};
+function normalizePage<T>(raw: unknown, map: (x: unknown) => T): Page<T> {
+  const content = extractContent(raw).map(map);
+  if (!isRecord(raw)) return { content };
 
+  const totalElements =
+    typeof raw.totalElements === "number" ? raw.totalElements : undefined;
+  const totalPages = typeof raw.totalPages === "number" ? raw.totalPages : undefined;
+  const number = typeof raw.number === "number" ? raw.number : undefined;
+  const size = typeof raw.size === "number" ? raw.size : undefined;
+
+  return { content, totalElements, totalPages, number, size };
+}
+
+function normalizeEvent(raw: unknown): Event {
+  if (!isRecord(raw)) throw new Error("Invalid event");
+  return {
+    id: String(raw.id ?? raw.event_id ?? ""),
+    calendar_id: String(raw.calendar_id ?? raw.calendarId ?? ""),
+    title: String(raw.title ?? ""),
+    description: (typeof raw.description === "string" ? raw.description : null) ?? null,
+    start_at: String(raw.start_at ?? raw.startAt ?? raw.start ?? ""),
+    end_at: String(raw.end_at ?? raw.endAt ?? raw.end ?? ""),
+    is_all_day: Boolean(raw.is_all_day ?? raw.isAllDay ?? false),
+  };
+}
+
+function normalizeTask(raw: unknown): Task {
+  if (!isRecord(raw)) throw new Error("Invalid task");
+  const statusRaw =
+    pickString(raw, "status") ?? pickString(raw, "state") ?? pickString(raw, "completed");
+  let status: TaskStatus = "PENDING";
+  if (typeof statusRaw === "string") {
+    const s = statusRaw.toUpperCase();
+    if (s.includes("COMP")) status = "COMPLETED";
+    else if (s.includes("CANCEL")) status = "CANCELLED";
+    else status = "PENDING";
+  }
+
+  const priorityRaw = pickString(raw, "priority");
+  let priority: TaskPriority | null = null;
+  if (priorityRaw) {
+    const p = priorityRaw.toUpperCase();
+    if (p === "LOW" || p === "MEDIUM" || p === "HIGH") priority = p;
+  }
+
+  return {
+    id: String(raw.id ?? raw.task_id ?? ""),
+    calendar_id: String(raw.calendar_id ?? raw.calendarId ?? ""),
+    title: String(raw.title ?? ""),
+    description: (typeof raw.description === "string" ? raw.description : null) ?? null,
+    due_at: String(raw.due_at ?? raw.dueAt ?? raw.due ?? ""),
+    status,
+    priority,
+    type: (typeof raw.type === "string" ? raw.type : null) ?? null,
+  };
+}
+
+// ---- types ----
 export type Event = {
   id: string;
   calendar_id: string;
@@ -205,7 +260,7 @@ export type Event = {
   description?: string | null;
   start_at: string; // ISO
   end_at: string; // ISO
-  is_all_day?: boolean;
+  is_all_day: boolean;
 };
 
 export type TaskStatus = "PENDING" | "COMPLETED" | "CANCELLED";
@@ -219,135 +274,106 @@ export type Task = {
   due_at: string; // ISO
   status: TaskStatus;
   priority?: TaskPriority | null;
-  type?: string | null; // e.g. "MEMO" (fallback)
-  // 서버에 따라 다른 필드가 올 수 있어도 런타임에서는 무시
+  type?: string | null; // e.g. "MEMO"
 };
 
-function asArray(v: unknown): unknown[] | null {
-  return Array.isArray(v) ? v : null;
-}
+export type Note = {
+  id: string;
+  calendar_id: string;
+  date: string; // YYYY-MM-DD
+  title?: string | null;
+  memo?: string | null;
+};
 
-function pickString(o: Record<string, unknown>, key: string): string | null {
-  const v = o[key];
-  return typeof v === "string" ? v : null;
-}
+// ---- calendar / events / tasks apis ----
 
-function normalizeEvent(raw: unknown): Event | null {
-  if (!isRecord(raw)) return null;
-  const id = pickString(raw, "id");
-  const calendar_id = pickString(raw, "calendar_id") ?? pickString(raw, "calendarId");
-  const title = pickString(raw, "title") ?? "";
-  const start_at = pickString(raw, "start_at") ?? pickString(raw, "startAt");
-  const end_at = pickString(raw, "end_at") ?? pickString(raw, "endAt");
-  if (!id || !calendar_id || !start_at || !end_at) return null;
-  const description = pickString(raw, "description");
-  const is_all_day = typeof raw.is_all_day === "boolean" ? raw.is_all_day : typeof raw.isAllDay === "boolean" ? raw.isAllDay : undefined;
-  return { id, calendar_id, title, description, start_at, end_at, is_all_day };
-}
-
-function normalizeTask(raw: unknown): Task | null {
-  if (!isRecord(raw)) return null;
-  const id = pickString(raw, "id");
-  const calendar_id = pickString(raw, "calendar_id") ?? pickString(raw, "calendarId");
-  const title = pickString(raw, "title") ?? "";
-  const due_at = pickString(raw, "due_at") ?? pickString(raw, "dueAt");
-  const status = (pickString(raw, "status") ?? "PENDING") as TaskStatus;
-  if (!id || !calendar_id || !due_at) return null;
-  const description = pickString(raw, "description");
-  const priority = (pickString(raw, "priority") as TaskPriority | null) ?? null;
-  const type = pickString(raw, "type");
-  return { id, calendar_id, title, description, due_at, status, priority, type };
-}
-
-function extractContent(raw: unknown): unknown[] {
-  if (Array.isArray(raw)) return raw;
-  if (isRecord(raw) && Array.isArray(raw.content)) return raw.content as unknown[];
-  return [];
-}
-
-// -----------------
-// Calendar / Event / Task APIs
-// -----------------
-
-export const calendarApi = {
-  async list(input: { page: number; size: number }): Promise<Page<Calendar>> {
-    return await jsonFetch<Page<Calendar>>(`${CALENDARS_LIST}${toQuery(input)}`, { method: "GET" }, { withAuth: true, retryOn401: true });
+export const calendarsApi = {
+  async list(): Promise<Array<{ id: string; name?: string | null }>> {
+    const raw = await jsonFetch<unknown>(CALENDARS_LIST, { withAuth: true, retryOn401: true });
+    if (Array.isArray(raw)) {
+      return raw.map((x) => {
+        if (!isRecord(x)) return { id: String(x) };
+        return { id: String(x.id ?? x.calendar_id ?? ""), name: (typeof x.name === "string" ? x.name : null) ?? null };
+      });
+    }
+    if (isRecord(raw) && Array.isArray(raw.content)) {
+      return (raw.content as unknown[]).map((x) => {
+        if (!isRecord(x)) return { id: String(x) };
+        return { id: String(x.id ?? x.calendar_id ?? ""), name: (typeof x.name === "string" ? x.name : null) ?? null };
+      });
+    }
+    return [];
   },
 };
 
-export const eventApi = {
-  async list(input: {
-    calendar_id: string;
-    page: number;
-    size: number;
-    start_from?: string;
-    start_to?: string;
-  }): Promise<Page<Event>> {
-    return await jsonFetch<Page<Event>>(`${EVENTS_LIST}${toQuery(input)}`, { method: "GET" }, { withAuth: true, retryOn401: true });
+export const eventsApi = {
+  async list(params?: { dateFrom?: string; dateTo?: string; calendarId?: string }): Promise<Page<Event>> {
+    const qs = new URLSearchParams();
+    if (params?.dateFrom) qs.set("dateFrom", params.dateFrom);
+    if (params?.dateTo) qs.set("dateTo", params.dateTo);
+    if (params?.calendarId) qs.set("calendarId", params.calendarId);
+
+    return await jsonFetch<Page<Event>>(`${EVENTS_LIST}?${qs.toString()}`, {
+      withAuth: true,
+      retryOn401: true,
+    });
   },
 
   async create(input: {
     calendar_id: string;
     title: string;
     description?: string | null;
+    is_all_day: boolean;
     start_at: string;
     end_at: string;
-    is_all_day?: boolean;
   }): Promise<Event> {
-    return await jsonFetch<Event>(
-      EVENTS_CREATE,
-      {
-        method: "POST",
-        body: JSON.stringify(input),
-      },
-      { withAuth: true, retryOn401: true }
-    );
+    return await jsonFetch<Event>(EVENTS_LIST, {
+      method: "POST",
+      body: JSON.stringify(input),
+      withAuth: true,
+      retryOn401: true,
+    });
   },
 
-  /**
-   * keyword 검색 (서버가 지원하면 사용)
-   * - 기대 스펙: GET /events?keyword=...
-   * - 서버에 따라 Page<T> 또는 T[] 형태로 올 수 있어 둘 다 지원
-   */
-  async search(input: { keyword: string }): Promise<Event[]> {
-    const raw = await jsonFetch<unknown>(`${EVENTS_LIST}${toQuery({ keyword: input.keyword })}`, { method: "GET" }, { withAuth: true, retryOn401: true });
+  async update(
+    id: string,
+    input: Partial<{
+      title: string;
+      description: string | null;
+      is_all_day: boolean;
+      start_at: string;
+      end_at: string;
+    }>
+  ): Promise<Event> {
+    return await jsonFetch<Event>(EVENTS_DETAIL(id), {
+      method: "PATCH",
+      body: JSON.stringify(input),
+      withAuth: true,
+      retryOn401: true,
+    });
+  },
 
-    // Page<Event>
-    if (isRecord(raw) && Array.isArray((raw as Record<string, unknown>).content)) {
-      return (raw as Page<Event>).content;
-    }
-    // Event[]
-    const arr = asArray(raw);
-    if (arr) return arr as Event[];
-
-    return [];
+  async remove(id: string): Promise<void> {
+    await jsonFetch<void>(EVENTS_DETAIL(id), { method: "DELETE", withAuth: true, retryOn401: true });
   },
 };
 
-/**
- * keyword 검색 (서버가 지원하면 사용)
- * - 응답이 Page<Event> 또는 Event[] 여도 동작하도록 방어적으로 파싱
- */
-export async function searchEvents(keyword: string): Promise<Event[]> {
-  const raw = await jsonFetch<unknown>(`${EVENTS_LIST}${toQuery({ keyword })}`, { method: "GET" }, { withAuth: true, retryOn401: true });
-  const items = extractContent(raw);
-  const out: Event[] = [];
-  for (const it of items) {
-    const ev = normalizeEvent(it);
-    if (ev) out.push(ev);
-  }
-  return out;
-}
+export const TASKS_DETAIL = (id: string) =>
+  `${API_BASE}/tasks/${encodeURIComponent(id)}`;
+export const EVENTS_DETAIL = (id: string) =>
+  `${API_BASE}/events/${encodeURIComponent(id)}`;
 
 export const taskApi = {
-  async list(input: {
-    calendar_id: string;
-    page: number;
-    size: number;
-    due_from?: string;
-    due_to?: string;
-  }): Promise<Page<Task>> {
-    return await jsonFetch<Page<Task>>(`${TASKS_LIST}${toQuery(input)}`, { method: "GET" }, { withAuth: true, retryOn401: true });
+  async list(params?: { dateFrom?: string; dateTo?: string; calendarId?: string }): Promise<Page<Task>> {
+    const qs = new URLSearchParams();
+    if (params?.dateFrom) qs.set("dateFrom", params.dateFrom);
+    if (params?.dateTo) qs.set("dateTo", params.dateTo);
+    if (params?.calendarId) qs.set("calendarId", params.calendarId);
+
+    return await jsonFetch<Page<Task>>(`${TASKS_LIST}?${qs.toString()}`, {
+      withAuth: true,
+      retryOn401: true,
+    });
   },
 
   async create(input: {
@@ -355,67 +381,71 @@ export const taskApi = {
     title: string;
     description?: string | null;
     due_at: string;
-    status: TaskStatus;
+    status?: TaskStatus;
     priority?: TaskPriority | null;
-    type?: string;
+    type?: string | null;
   }): Promise<Task> {
-    return await jsonFetch<Task>(
-      TASKS_CREATE,
-      {
-        method: "POST",
-        body: JSON.stringify(input),
-      },
-      { withAuth: true, retryOn401: true }
-    );
+    return await jsonFetch<Task>(TASKS_LIST, {
+      method: "POST",
+      body: JSON.stringify(input),
+      withAuth: true,
+      retryOn401: true,
+    });
   },
 
-  /**
-   * keyword 검색 (서버가 지원하면 사용)
-   * - 기대 스펙: GET /tasks?keyword=...
-   * - 서버에 따라 Page<T> 또는 T[] 형태로 올 수 있어 둘 다 지원
-   */
-  async search(input: { keyword: string }): Promise<Task[]> {
-    const raw = await jsonFetch<unknown>(`${TASKS_LIST}${toQuery({ keyword: input.keyword })}`, { method: "GET" }, { withAuth: true, retryOn401: true });
+  async update(
+    id: string,
+    input: Partial<{
+      title: string;
+      description: string | null;
+      due_at: string;
+      status: TaskStatus;
+      priority: TaskPriority | null;
+      type: string | null;
+    }>
+  ): Promise<Task> {
+    return await jsonFetch<Task>(TASKS_DETAIL(id), {
+      method: "PATCH",
+      body: JSON.stringify(input),
+      withAuth: true,
+      retryOn401: true,
+    });
+  },
 
-    if (isRecord(raw) && Array.isArray((raw as Record<string, unknown>).content)) {
-      return (raw as Page<Task>).content;
-    }
-    const arr = asArray(raw);
-    if (arr) return arr as Task[];
-    return [];
+  async remove(id: string): Promise<void> {
+    await jsonFetch<void>(TASKS_DETAIL(id), { method: "DELETE", withAuth: true, retryOn401: true });
+  },
+
+  // completed 토글: 서버가 status 기반이면 여기서 매핑
+  async toggleComplete(id: string, completed: boolean): Promise<Task> {
+    const nextStatus: TaskStatus = completed ? "COMPLETED" : "PENDING";
+    return await taskApi.update(id, { status: nextStatus });
   },
 };
 
-/** keyword 검색 (서버가 지원하면 사용) */
-export async function searchTasks(keyword: string): Promise<Task[]> {
-  const raw = await jsonFetch<unknown>(`${TASKS_LIST}${toQuery({ keyword })}`, { method: "GET" }, { withAuth: true, retryOn401: true });
-  const items = extractContent(raw);
-  const out: Task[] = [];
-  for (const it of items) {
-    const t = normalizeTask(it);
-    if (t) out.push(t);
-  }
-  return out;
-}
-
-// -----------------
-// NOTE / MEMO fallback helper (optional)
-// -----------------
-
+// notes는 서버 스펙 확정 전까지 최소치만
 export const notesApi = {
-  async create(input: { calendar_id: string; dateISO: string; title: string; memo?: string }): Promise<void> {
-    await jsonFetch<void>(
-      NOTES_CREATE,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          calendar_id: input.calendar_id,
-          date: input.dateISO,
-          title: input.title,
-          memo: input.memo ?? null,
-        }),
-      },
-      { withAuth: true, retryOn401: true }
-    );
+  async create(input: { calendar_id: string; date: string; title?: string | null; memo?: string | null }): Promise<Note> {
+    return await jsonFetch<Note>(NOTES_CREATE, {
+      method: "POST",
+      body: JSON.stringify(input),
+      withAuth: true,
+      retryOn401: true,
+    });
+  },
+
+  async update(
+    id: string,
+    input: Partial<{ title: string | null; memo: string | null }>
+  ): Promise<Note> {
+    // eslint-disable-next-line no-console
+    console.warn("notesApi.update is TODO (server endpoint required)", id, input);
+    throw new Error("notes update endpoint is not available (TODO)");
+  },
+
+  async remove(id: string): Promise<void> {
+    // eslint-disable-next-line no-console
+    console.warn("notesApi.remove is TODO (server endpoint required)", id);
+    throw new Error("notes delete endpoint is not available (TODO)");
   },
 };

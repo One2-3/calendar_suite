@@ -396,3 +396,885 @@
 @media (prefers-color-scheme: dark){
   .btn-solid{ background: rgba(244,244,245,0.10); }
 }
+
+/* apps/web/src/index.css */
+
+/* 테마 기본 */
+:root,
+html.light,
+html[data-theme="light"] {
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted: rgba(0,0,0,0.55);
+  --card: rgba(0,0,0,0.03);
+  --line: rgba(0,0,0,0.10);
+  --danger: #d93025;
+}
+
+html.dark,
+html[data-theme="dark"] {
+  --bg: #0b0b0c;
+  --fg: #f3f3f4;
+  --muted: rgba(255,255,255,0.6);
+  --card: rgba(255,255,255,0.06);
+  --line: rgba(255,255,255,0.12);
+  --danger: #ff6b6b;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* BottomNav */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.bottom-nav-spacer {
+  flex: 1;
+}
+
+.bottom-nav-btn {
+  height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--fg);
+  font-size: 16px;
+}
+
+.bottom-nav-btn-primary {
+  border: 1px solid var(--line);
+  background: var(--fg);
+  color: var(--bg);
+}
+
+/* Drawer */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  justify-content: flex-start;
+  align-items: stretch;
+  z-index: 50;
+}
+
+.drawer {
+  width: min(86vw, 360px);
+  background: var(--bg);
+  color: var(--fg);
+  border-right: 1px solid var(--line);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: drawerIn 160ms ease-out;
+}
+
+@keyframes drawerIn {
+  from { transform: translateX(-8px); opacity: 0.6; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.drawer-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.drawer-x {
+  height: 36px;
+  width: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--fg);
+}
+
+.drawer-section {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.drawer-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drawer-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+  color: var(--muted);
+}
+
+.drawer-muted {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.drawer-warn {
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.drawer-kv .kv-row {
+  display: flex;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px dashed var(--line);
+}
+.drawer-kv .kv-row:first-child { border-top: none; }
+
+.kv-k {
+  width: 56px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.kv-v {
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.drawer-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.drawer-select {
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg);
+  padding: 0 10px;
+}
+
+.drawer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drawer-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.drawer-check input {
+  width: 16px;
+  height: 16px;
+}
+
+.drawer-check-label {
+  flex: 1;
+}
+
+.drawer-logout {
+  width: 100%;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* =========================
+   Minimal UI (Modal / Sheet / Chips)
+   Paste into: apps/web/src/index.css (append)
+   ========================= */
+
+   :root {
+    --bg: #0f1115;
+    --panel: #151922;
+    --panel-2: #111521;
+    --text: rgba(255, 255, 255, 0.92);
+    --muted: rgba(255, 255, 255, 0.62);
+  
+    --border: rgba(255, 255, 255, 0.10);
+    --border-2: rgba(255, 255, 255, 0.14);
+  
+    --shadow: 0 14px 50px rgba(0, 0, 0, 0.55);
+    --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.35);
+  
+    --radius-xl: 18px;
+    --radius-lg: 14px;
+    --radius-md: 12px;
+    --radius-sm: 10px;
+  
+    --gap: 12px;
+    --pad: 16px;
+  
+    --focus: rgba(120, 150, 255, 0.55);
+  
+    --chip-event: rgba(120, 150, 255, 0.18);
+    --chip-task: rgba(120, 255, 190, 0.16);
+    --chip-memo: rgba(255, 210, 120, 0.16);
+  }
+  
+  /* Basic page defaults (safe additions) */
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+  }
+  
+  * { box-sizing: border-box; }
+  
+  a, button { color: inherit; }
+  
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  
+  /* =========================
+     Composer Sheet (ComposerSheet.tsx)
+     ========================= */
+  
+  .sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 1000;
+  
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    padding: 18px 12px;
+  }
+  
+  .sheet {
+    width: min(720px, 100%);
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+    background-color: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  
+  .sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  
+  .sheet-title {
+    font-size: 16px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+  }
+  
+  .sheet-sub {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  
+  .sheet-x,
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.04);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform .08s ease, background .12s ease, border-color .12s ease;
+  }
+  
+  .sheet-x:hover,
+  .icon-btn:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: var(--border-2);
+  }
+  
+  .sheet-x:active,
+  .icon-btn:active {
+    transform: translateY(1px);
+  }
+  
+  .sheet-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  
+  .tab {
+    flex: 1;
+    height: 36px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.03);
+    color: var(--muted);
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease, color .12s ease;
+  }
+  
+  .tab:hover {
+    background: rgba(255,255,255,0.06);
+    border-color: var(--border-2);
+    color: rgba(255,255,255,0.84);
+  }
+  
+  .tab.active {
+    background: rgba(255,255,255,0.10);
+    border-color: rgba(255,255,255,0.22);
+    color: var(--text);
+  }
+  
+  .sheet-body {
+    padding: 14px 16px 8px;
+    display: grid;
+    gap: 12px;
+  }
+  
+  .label {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  
+  .input,
+  .textarea,
+  select {
+    width: 100%;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: rgba(0,0,0,0.18);
+    color: var(--text);
+    padding: 11px 12px;
+    font-size: 14px;
+    outline: none;
+  }
+  
+  .input::placeholder,
+  .textarea::placeholder {
+    color: rgba(255,255,255,0.35);
+  }
+  
+  .input:focus,
+  .textarea:focus,
+  select:focus {
+    border-color: rgba(120,150,255,0.55);
+    box-shadow: 0 0 0 3px rgba(120,150,255,0.15);
+  }
+  
+  .textarea {
+    min-height: 96px;
+    resize: vertical;
+  }
+  
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 2px;
+    color: rgba(255,255,255,0.86);
+    user-select: none;
+  }
+  
+  .check-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: rgba(120,150,255,0.9);
+  }
+  
+  .err {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: rgba(255, 120, 120, 0.95);
+  }
+  
+  .sheet-foot {
+    display: flex;
+    gap: 10px;
+    padding: 12px 16px 14px;
+    border-top: 1px solid var(--border);
+    justify-content: flex-end;
+  }
+  
+  .btn {
+    height: 38px;
+    padding: 0 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.04);
+    color: rgba(255,255,255,0.86);
+    cursor: pointer;
+    transition: transform .08s ease, background .12s ease, border-color .12s ease;
+  }
+  
+  .btn:hover {
+    background: rgba(255,255,255,0.07);
+    border-color: var(--border-2);
+  }
+  
+  .btn:active { transform: translateY(1px); }
+  
+  .btn.primary {
+    border-color: rgba(120,150,255,0.35);
+    background: rgba(120,150,255,0.18);
+    color: rgba(255,255,255,0.95);
+  }
+  
+  .btn.primary:hover {
+    background: rgba(120,150,255,0.24);
+    border-color: rgba(120,150,255,0.55);
+  }
+  
+  .btn.danger {
+    border-color: rgba(255,120,120,0.40);
+    background: rgba(255,120,120,0.16);
+  }
+  
+  .btn.danger:hover {
+    background: rgba(255,120,120,0.22);
+    border-color: rgba(255,120,120,0.58);
+  }
+  
+  .btn:disabled,
+  .icon-btn:disabled,
+  .tab:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  
+  /* =========================
+     Month Grid (Calendar/MonthGrid.tsx)
+     ========================= */
+  
+  .month-grid {
+    position: relative;
+    padding: 10px 0 0;
+  }
+  
+  .week-row {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  
+  .day-cell {
+    position: relative;
+    min-height: 108px; /* PeriodBars.tsx rowTop 계산과 맞춤 */
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: rgba(255,255,255,0.03);
+    overflow: hidden;
+  }
+  
+  .day-cell.out {
+    opacity: 0.55;
+    background: rgba(255,255,255,0.02);
+  }
+  
+  .day-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  
+  .day-num {
+    font-size: 13px;
+    font-weight: 650;
+    color: rgba(255,255,255,0.90);
+  }
+  
+  .day-num.sun { color: rgba(255, 140, 140, 0.95); }
+  
+  .day-iso {
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+  }
+  
+  .chips {
+    display: grid;
+    gap: 6px;
+  }
+  
+  /* Chips */
+  .chip {
+    width: 100%;
+    text-align: left;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.16);
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease, transform .08s ease;
+  }
+  
+  .chip:hover {
+    background: rgba(255,255,255,0.06);
+    border-color: var(--border-2);
+  }
+  
+  .chip:active { transform: translateY(1px); }
+  
+  .chip .chip-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: rgba(255,255,255,0.92);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .chip .chip-meta {
+    margin-top: 4px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    display: flex;
+    gap: 8px;
+  }
+  
+  .chip.event { background: var(--chip-event); }
+  .chip.task  { background: var(--chip-task); }
+  .chip.memo  { background: var(--chip-memo); }
+  
+  .chip.event { border-color: rgba(120,150,255,0.22); }
+  .chip.task  { border-color: rgba(120,255,190,0.20); }
+  .chip.memo  { border-color: rgba(255,210,120,0.20); }
+  
+  /* =========================
+     Period bars (Calendar/PeriodBars.tsx)
+     ========================= */
+  
+  .period-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  
+  .period-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    padding: 0 0;
+  }
+  
+  .period-bar {
+    /* grid columns are 7, use CSS vars from JS */
+    position: absolute;
+    left: calc((var(--c1) - 1) * (100% / 7));
+    width: calc((var(--c2) - var(--c1)) * (100% / 7));
+    top: calc(10px + (var(--lane) * 22px));
+    height: 18px;
+  
+    border-radius: 999px;
+    border: 1px solid rgba(120,150,255,0.25);
+    background: rgba(120,150,255,0.14);
+    box-shadow: var(--shadow-soft);
+  
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    overflow: hidden;
+  }
+  
+  .period-bar .txt {
+    font-size: 11px;
+    color: rgba(255,255,255,0.88);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  /* =========================
+     Optional: generic modal styles (if you add later)
+     ========================= */
+  
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 1100;
+    display: grid;
+    place-items: center;
+    padding: 18px 12px;
+  }
+  
+  .modal {
+    width: min(680px, 100%);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  
+  .modal-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .modal-body { padding: 14px 16px; }
+  .modal-foot {
+    padding: 12px 16px 14px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+  
+  /* =========================
+   Minimal UI (Topbar / Weekdays / App Shell)
+   Append after previous block
+   ========================= */
+
+/* App shell */
+.app-shell {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Topbar */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(15, 17, 21, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar > div,
+.topbar-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 14px 14px 10px;
+}
+
+.topbar-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.topbar-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* If you have a right-side actions row */
+.topbar-actions,
+.topbar-right,
+.topbar-buttons {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.icon-btn,
+.topbar .icon-btn,
+.topbar button.icon-btn,
+.topbar .icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform .08s ease, background .12s ease, border-color .12s ease;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--border-2);
+}
+
+.icon-btn:active { transform: translateY(1px); }
+
+/* If you used plain buttons in the topbar */
+.topbar button {
+  border-radius: 12px;
+}
+
+/* Status row (e.g. "불러오는 중...") */
+.topbar-status,
+.topbar .status {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.72);
+}
+
+.topbar-status.loading,
+.topbar .status.loading {
+  color: rgba(255,255,255,0.78);
+}
+
+/* =========================
+   Weekdays row (CalendarPage.tsx)
+   ========================= */
+
+.weekdays {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 12px 14px 10px;
+
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+
+  color: rgba(255,255,255,0.68);
+}
+
+.weekday {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+
+  padding: 8px 0;
+  border-radius: 12px;
+  border: 1px solid transparent;
+}
+
+.weekday.sun {
+  color: rgba(255, 140, 140, 0.95);
+}
+
+.weekday:hover {
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+
+/* If you used a wrapper name like "month-wrap" */
+.month-wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 14px 18px;
+}
+
+/* Make MonthGrid a bit nicer when used inside month-wrap */
+.month-wrap .month-grid {
+  padding-top: 6px;
+}
+
+/* =========================
+   Bottom nav (if used)
+   ========================= */
+
+.bottom-nav,
+.BottomNav {
+  position: sticky;
+  bottom: 0;
+  z-index: 60;
+
+  background: rgba(15, 17, 21, 0.75);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  border-top: 1px solid var(--border);
+}
+
+.bottom-nav-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-around;
+  gap: 10px;
+}
+
+.bottom-nav a,
+.bottom-nav button {
+  flex: 1;
+  height: 40px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.82);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease, transform .08s ease;
+}
+
+.bottom-nav a:hover,
+.bottom-nav button:hover {
+  background: rgba(255,255,255,0.07);
+  border-color: var(--border-2);
+}
+
+.bottom-nav a:active,
+.bottom-nav button:active { transform: translateY(1px); }
+
+.bottom-nav a.active,
+.bottom-nav button.active {
+  background: rgba(120,150,255,0.18);
+  border-color: rgba(120,150,255,0.45);
+  color: rgba(255,255,255,0.95);
+}
+
+/* =========================
+   Utility spacing (optional)
+   ========================= */
+
+/* Small helper classes if you ever want them */
+.pad { padding: 14px; }
+.muted { color: var(--muted); }
+.card {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-soft);
+}

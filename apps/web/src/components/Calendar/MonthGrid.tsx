@@ -1,121 +1,82 @@
-import { useMemo } from "react";
-import { Event, Task } from "../../lib/api";
-import { isPast, isSunday, sameDay, isoDate } from "../../lib/date";
+// apps/web/src/components/Calendar/MonthGrid.tsx
+import type { Event, Task } from "../../lib/api";
 
-function pickString(o: Record<string, unknown>, key: string): string | null {
-  const v = o[key];
-  return typeof v === "string" ? v : null;
-}
+export type ChipTarget =
+  | { kind: "event"; event: Event }
+  | { kind: "task"; task: Task }
+  | { kind: "memo"; task: Task };
 
-function eventStartISO(e: Event): string {
-  return (typeof e.start_at === "string" ? e.start_at : null) ?? pickString(e as Record<string, unknown>, "startAt") ?? "";
-}
-
-function taskDueISO(t: Task): string {
-  return (typeof t.due_at === "string" ? t.due_at : null) ?? pickString(t as Record<string, unknown>, "dueAt") ?? "";
-}
-
-function taskTitle(t: Task): string {
-  const title = typeof t.title === "string" ? t.title : "";
-  // memo fallback: type="MEMO"면 제목이 비어도 최소 표기
-  const type = pickString(t as Record<string, unknown>, "type");
-  if (!title.trim() && type === "MEMO") return "메모";
-  return title;
-}
-
-type Item =
-  | { kind: "event"; title: string }
-  | { kind: "task"; title: string; task: Task };
-
-export default function MonthGrid(props: {
+type Props = {
   rows: { date: Date; inMonth: boolean }[][];
   events: Event[];
   tasks: Task[];
   selectedISO: string;
   onPickDate: (iso: string) => void;
-}) {
-  const today = useMemo(() => new Date(), []);
+  onPickItem?: (t: ChipTarget) => void; // ✅ 추가
+};
 
-  const eventsByDate = useMemo(() => {
-    const m = new Map<string, Event[]>();
-    for (const e of props.events) {
-      const start = eventStartISO(e);
-      const k = start.slice(0, 10);
-      if (!k) continue;
-      const arr = m.get(k) ?? [];
-      arr.push(e);
-      m.set(k, arr);
-    }
-    return m;
-  }, [props.events]);
+function isoDate(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
 
-  const tasksByDate = useMemo(() => {
-    const m = new Map<string, Task[]>();
-    for (const t of props.tasks) {
-      const due = taskDueISO(t);
-      const k = due.slice(0, 10);
-      if (!k) continue;
-      const arr = m.get(k) ?? [];
-      arr.push(t);
-      m.set(k, arr);
-    }
-    return m;
-  }, [props.tasks]);
+export default function MonthGrid(props: Props) {
+  const { rows, events, tasks, selectedISO, onPickDate, onPickItem } = props;
 
   return (
     <div className="month-grid">
-      {props.rows.flat().map((cell) => {
-        const iso = isoDate(cell.date);
-        const dayEvents = eventsByDate.get(iso) ?? [];
-        const dayTasks = tasksByDate.get(iso) ?? [];
+      {rows.map((week, wi) => (
+        <div key={wi} className="week-row">
+          {week.map((cell, di) => {
+            const dateISO = isoDate(cell.date);
+            const dayEvents = events.filter((e) => e.start_at.slice(0, 10) === dateISO);
+            const dayTasks = tasks.filter((t) => t.due_at.slice(0, 10) === dateISO);
 
-        const items: Item[] = [
-          ...dayEvents.map((e): Item => ({ kind: "event", title: e.title })),
-          ...dayTasks.map((t): Item => ({ kind: "task", title: taskTitle(t), task: t })),
-        ].slice(0, 3);
+            return (
+              <div
+                key={di}
+                className={["day-cell", cell.inMonth ? "in" : "out", dateISO === selectedISO ? "selected" : ""].join(" ")}
+                onClick={() => onPickDate(dateISO)}
+              >
+                <div className="day-num">{cell.date.getDate()}</div>
 
-        const isTod = sameDay(cell.date, today);
-        const sun = isSunday(cell.date);
-        const selected = iso === props.selectedISO;
+                <div className="chips">
+                  {dayEvents.map((e) => (
+                    <button
+                      key={e.id}
+                      className="chip chip-event"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        onPickItem?.({ kind: "event", event: e });
+                      }}
+                    >
+                      {e.title}
+                    </button>
+                  ))}
 
-        return (
-          <button
-            key={iso}
-            type="button"
-            className={["day-cell", selected ? "selected" : ""].join(" ")}
-            onClick={() => props.onPickDate(iso)}
-            aria-label={`${iso} 선택`}
-          >
-            <div className="day-head">
-              <div className={["day-num", !cell.inMonth ? "muted" : "", sun ? "sun" : ""].join(" ")}>
-                {cell.date.getDate()}
+                  {dayTasks.map((t) => {
+                    const kind = (t.type ?? "").toUpperCase() === "MEMO" ? "memo" : "task";
+                    return (
+                      <button
+                        key={t.id}
+                        className={["chip", kind === "memo" ? "chip-memo" : "chip-task", t.status === "COMPLETED" ? "done" : ""].join(" ")}
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          onPickItem?.({ kind, task: t } as ChipTarget);
+                        }}
+                      >
+                        {t.title}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              {isTod ? <div className="today-pill">오늘</div> : null}
-            </div>
-
-            <div className="chips">
-              {items.map((it, idx) => {
-                const dueISO = it.kind === "task" ? taskDueISO(it.task) : "";
-                const status = it.kind === "task" ? pickString(it.task as Record<string, unknown>, "status") : null;
-
-                // 미완료 + 지난 할일 => danger
-                const danger =
-                  it.kind === "task" &&
-                  status !== "COMPLETED" &&
-                  !!dueISO &&
-                  isPast(new Date(dueISO), today);
-
-                return (
-                  <div key={idx} className={["chip", danger ? "danger" : ""].join(" ")}>
-                    <span className="dot" />
-                    <span className="label">{it.title}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </button>
-        );
-      })}
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }

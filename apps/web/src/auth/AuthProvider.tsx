@@ -3,10 +3,29 @@ import { useEffect, useMemo, useState } from "react";
 import { signOut } from "firebase/auth";
 import { firebaseAuth } from "../lib/firebase";
 import { themeStorage, tokenStorage, type ThemeMode } from "../lib/storage";
-import { authApi, setOnAuthFailure } from "../lib/api";
 import type { AuthStatus, ServerUser } from "./types";
 import { AuthContext } from "./AuthContext";
 import { applyTheme } from "../lib/theme";
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+const AUTH_ME = `${API_BASE}/auth/me`;
+
+async function fetchMe(accessToken: string): Promise<ServerUser> {
+  const res = await fetch(AUTH_ME, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!res.ok) {
+    const msg = await res.text();
+    throw new Error(msg || `HTTP ${res.status}`);
+  }
+
+  return (await res.json()) as ServerUser;
+}
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   // ✅ effect에서 setState 경고 피하려고 초기값을 여기서 결정
@@ -34,7 +53,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const refreshMe = async () => {
     try {
       setStatus("loading");
-      const user = await authApi.me(); // 내부에서 401→refresh→retry 처리
+      const access = tokenStorage.getAccess();
+      if (!access) throw new Error("No access token");
+      const user = await fetchMe(access);
       setMe(user);
       setStatus("authed");
     } catch {
@@ -43,11 +64,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   };
 
   useEffect(() => {
-    // api.ts에서 refresh 실패하면 강제 logout 되도록 연결
-    setOnAuthFailure(() => {
-      void logout();
-    });
-
     // access 없으면 그대로 guest
     const access = tokenStorage.getAccess();
     if (!access) return;

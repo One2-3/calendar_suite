@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { eventApi, taskApi, TaskPriority, TaskStatus } from "../lib/api";
+import { eventsApi, taskApi, TaskPriority, TaskStatus } from "../lib/api";
 
 type Mode = "TASK" | "EVENT" | "MEMO";
 
@@ -52,7 +52,7 @@ export default function ComposerModal(props: {
     setBusy(true);
     try {
       if (mode === "EVENT") {
-        await eventApi.create({
+        await eventsApi.create({
           calendar_id: props.defaultCalendarId,
           title: title.trim(),
           description: description.trim() ? description.trim() : null,
