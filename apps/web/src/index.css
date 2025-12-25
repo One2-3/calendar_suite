@@ -404,22 +404,51 @@
 html.light,
 html[data-theme="light"] {
   --bg: #ffffff;
+  --bg2: #f6f6f6;
+
   --fg: #111111;
+  --text: var(--fg);
   --muted: rgba(0,0,0,0.55);
+
   --card: rgba(0,0,0,0.03);
+  --panel: rgba(0,0,0,0.05);
+  --panel-2: rgba(0,0,0,0.03);
+
   --line: rgba(0,0,0,0.10);
+  --border: rgba(0,0,0,0.14);
+  --border-2: rgba(0,0,0,0.22);
+
+  --surface-1: rgba(0,0,0,0.04);
+  --surface-2: rgba(0,0,0,0.07);
+  --surface-3: rgba(0,0,0,0.10);
+
   --danger: #d93025;
 }
 
 html.dark,
 html[data-theme="dark"] {
   --bg: #0b0b0c;
+  --bg2: #0f1115;
+
   --fg: #f3f3f4;
+  --text: var(--fg);
   --muted: rgba(255,255,255,0.6);
+
   --card: rgba(255,255,255,0.06);
+  --panel: rgba(255,255,255,0.06);
+  --panel-2: rgba(255,255,255,0.04);
+
   --line: rgba(255,255,255,0.12);
+  --border: rgba(255,255,255,0.16);
+  --border-2: rgba(255,255,255,0.22);
+
+  --surface-1: rgba(255,255,255,0.04);
+  --surface-2: rgba(255,255,255,0.07);
+  --surface-3: rgba(255,255,255,0.10);
+
   --danger: #ff6b6b;
 }
+
 
 body {
   background: var(--bg);
@@ -1273,4 +1302,137 @@ body {
   background: rgba(255,255,255,0.03);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-soft);
+}
+
+/* === FIX: light mode day number visibility === */
+html.light .day-cell,
+html[data-theme="light"] .day-cell {
+  color: var(--fg);
+}
+
+/* 날짜 숫자 클래스명이 프로젝트마다 다를 수 있어서 여러 후보를 같이 잡음 */
+html.light .day-cell :is(.day-num, .day-number, .dayNumber, .num, .date, .day-label, .dayLabel),
+html[data-theme="light"] .day-cell :is(.day-num, .day-number, .dayNumber, .num, .date, .day-label, .dayLabel) {
+  color: var(--fg) !important;
+  opacity: 0.92 !important;
+}
+/* === Light: make top/bottom bars white === */
+html.light .topbar,
+html[data-theme="light"] .topbar {
+  background: #fff !important;
+  color: var(--fg) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+/* topbar 안 글씨도 같이 보장 */
+html.light .topbar * ,
+html[data-theme="light"] .topbar * {
+  color: inherit;
+}
+
+html.light .bottom-nav,
+html[data-theme="light"] .bottom-nav {
+  background: #fff !important;
+  border-top: 1px solid var(--border) !important;
+}
+
+/* 하단 버튼도 라이트에서 글씨 안 죽게 */
+html.light .bottom-nav .bottom-nav-btn,
+html[data-theme="light"] .bottom-nav .bottom-nav-btn {
+  color: var(--fg) !important;
+  background: rgba(0,0,0,0.04) !important;
+  border: 1px solid var(--border) !important;
+}
+
+html.light .bottom-nav .bottom-nav-btn-primary,
+html[data-theme="light"] .bottom-nav .bottom-nav-btn-primary {
+  background: rgba(0,0,0,0.08) !important;
+  border-color: var(--border-2) !important;
+}
+/* =========================
+   Light mode: text contrast fix
+   ========================= */
+
+/* 1) 라이트 기본 글자/약한 글자 색을 더 진하게 */
+html.light,
+html[data-theme="light"] {
+  --fg: rgba(0, 0, 0, 0.88);
+  --muted-fg: rgba(0, 0, 0, 0.62);
+}
+
+/* 2) 라이트에서 전체 기본 텍스트 대비 보장 */
+html.light body,
+html[data-theme="light"] body {
+  color: var(--fg);
+}
+
+/* 3) 요일/헤더/서브텍스트(날짜 범위 등) 흐릿한 문제 해결 */
+html.light .dow,
+html.light .weekday,
+html.light .weekday-label,
+html.light .range,
+html.light .topbar-subtitle,
+html.light .calendar-range,
+html[data-theme="light"] .dow,
+html[data-theme="light"] .weekday,
+html[data-theme="light"] .weekday-label,
+html[data-theme="light"] .range,
+html[data-theme="light"] .topbar-subtitle,
+html[data-theme="light"] .calendar-range {
+  color: var(--muted-fg) !important;
+  opacity: 1 !important;
+}
+
+/* 4) 드로어(설정)쪽 섹션 라벨/본문도 흐릿함 제거 */
+html.light .drawer,
+html[data-theme="light"] .drawer {
+  color: var(--fg) !important;
+}
+
+html.light .drawer-section > div,
+html[data-theme="light"] .drawer-section > div {
+  opacity: 1 !important; /* 기존 0.7 같은거 무력화 */
+}
+
+/* 5) 버튼 텍스트도 라이트에서 확실히 보이게 */
+html.light .btn,
+html.light .icon-btn,
+html.light .bottom-nav .bottom-nav-btn,
+html[data-theme="light"] .btn,
+html[data-theme="light"] .icon-btn,
+html[data-theme="light"] .bottom-nav .bottom-nav-btn {
+  color: var(--fg) !important;
+}
+
+/* 6) 체크박스 라벨 텍스트(캘린더 목록) */
+html.light .check-row span,
+html[data-theme="light"] .check-row span {
+  color: var(--fg) !important;
+  opacity: 1 !important;
+}
+
+/* =========================
+   Bottom nav + drawer interaction
+   ========================= */
+
+/* 기본 상태 (메뉴 닫힘) */
+.bottom-nav {
+  transition: left 0.25s ease, width 0.25s ease;
+}
+
+/* 메뉴 열렸을 때 */
+body.drawer-open .bottom-nav {
+  left: 320px;               /* drawer width */
+  width: calc(100% - 320px);
+}
+
+/* 모바일 대응 (drawer가 full-width면 하단바 그대로) */
+@media (max-width: 768px) {
+  body.drawer-open .bottom-nav {
+    left: 0;
+    width: 100%;
+  }
+}
+body.drawer-open .bottom-nav {
+  border-top-left-radius: 0;
 }

@@ -28,6 +28,12 @@ export default function SideDrawer(props: {
 }) {
   const { open, onClose, calendars, enabledCalendarIds, onToggleCalendar } = props;
 
+  const themeOptions: Array<{ mode: ThemeMode; label: string }> = [
+    { mode: "auto", label: "system" },
+    { mode: "light", label: "light" },
+    { mode: "dark", label: "dark" },
+  ];
+
   const [theme, setTheme] = useState<ThemeMode>(() => getStoredThemeMode());
   const [me, setMe] = useState<MeView>({});
 
@@ -36,7 +42,18 @@ export default function SideDrawer(props: {
     setMe({});
   }, [open]);
   
-
+  useEffect(() => {
+    if (open) {
+      document.body.classList.add("drawer-open");
+    } else {
+      document.body.classList.remove("drawer-open");
+    }
+  
+    return () => {
+      document.body.classList.remove("drawer-open");
+    };
+  }, [open]);
+  
   const enabledIds = useMemo(() => {
     const any = Object.keys(enabledCalendarIds).length > 0;
     if (!any) return calendars.map((c) => c.id);
@@ -80,17 +97,17 @@ export default function SideDrawer(props: {
         <div className="drawer-section">
           <div style={{ fontSize: 12, opacity: 0.7 }}>테마</div>
           <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-            {(["system", "light", "dark"] as ThemeMode[]).map((m) => (
+            {themeOptions.map(({ mode, label }) => (
               <button
-                key={m}
-                className={["btn", theme === m ? "primary" : ""].join(" ")}
+                key={mode}
+                className={["btn", theme === mode ? "primary" : ""].join(" ")}
                 onClick={() => {
-                  setTheme(m);
-                  setStoredThemeMode(m);
-                  applyTheme(m);
+                  setTheme(mode);
+                  setStoredThemeMode(mode);
+                  applyTheme(mode);
                 }}
               >
-                {m}
+                {label}
               </button>
             ))}
           </div>
